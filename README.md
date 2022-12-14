@@ -4,31 +4,33 @@
 
 **Team:** Sélimi
 
-**Date:** décembre 2022
+**Date:** December 2022
 
 **Software:** Fiji
 
-### Images nucleus and Cfos cells 2D stack 
+### Images description
 
 2D images taken with a x40 objective
 
 2 channels:
+  1. *CSU_405*: DAPI nuclei
+  2. *CSU_642*: c-Fos cells 
 
-1. DAPI: DAPI nuclei
-2. CFos cells Alexa642
+With each image should be provided a .roi or .zip file containing one or multiple ROI(s).
 
 ### Plugin description
 
-* In 2D images of granule cells, count nuclei (based on nuclei segmented area) and count c-Fos-positive cells with cellPose. Accept rois
-
-* Roi area
+* Count nuclei based on the total volume of packed nuclei divided by as nucleus volume estimation of 250 microns^3
+* Count c-Fos cells with Cellpose
 
 ### Dependencies
 
-**3DImageSuite** Fiji plugin
+* **3DImageSuite** Fiji plugin
 
-**CLIJ** Fiji plugin
+* **CLIJ** Fiji plugin
+
+* **Cellpose* conda environment + *cyto* model
 
 ### Version history
 
-Version 1 released on décembre 14, 2022.
+Version 1 released on December 14, 2022.

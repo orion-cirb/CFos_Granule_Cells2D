@@ -26,10 +26,8 @@ With each image should be provided a .roi or .zip file containing one or multipl
 ### Dependencies
 
 * **3DImageSuite** Fiji plugin
-
 * **CLIJ** Fiji plugin
-
-* **Cellpose* conda environment + *cyto* model
+* **Cellpose** conda environment + *cyto* model
 
 ### Version history
 

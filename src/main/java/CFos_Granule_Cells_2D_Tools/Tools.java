@@ -7,15 +7,12 @@ import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.PolygonRoi;
 import ij.gui.Roi;
-import ij.gui.WaitForUserDialog;
 import ij.io.FileSaver;
 import ij.measure.Calibration;
 import ij.measure.ResultsTable;
-import ij.plugin.Duplicator;
 import ij.plugin.RGBStackMerge;
 import ij.plugin.filter.Analyzer;
 import ij.process.ImageProcessor;
-import io.scif.DependencyException;
 import java.awt.Color;
 import java.awt.Font;
 import java.io.File;
@@ -28,8 +25,6 @@ import loci.common.services.ServiceException;
 import loci.formats.FormatException;
 import loci.formats.meta.IMetadata;
 import loci.plugins.util.ImageProcessorReader;
-import mcib3d.geom2.BoundingBox;
-import mcib3d.geom2.Object3DInt;
 import mcib3d.geom2.Objects3DIntPopulation;
 import mcib3d.geom2.Objects3DIntPopulationComputation;
 import mcib3d.geom2.measurements.MeasureIntensity;
@@ -46,20 +41,21 @@ public class Tools {
     private CLIJ2 clij2 = CLIJ2.getInstance();
     private final ImageIcon icon = new ImageIcon(this.getClass().getResource("/Orion_icon.png"));
     
-    public String[] channelNames = {"Hoechst", "c-Fos"};
+    public String[] channelsName = {"Hoechst", "c-Fos"};
     public Calibration cal = new Calibration();
     public double pixArea = 0;
     
     // Nuclei detection
     private double meanNucArea = 50; 
-    private double minCFosArea = 20;
-    private double maxCFosArea = 100;
     
-    // CFos detection       
+    // c-Fos detection       
     private String cellposeEnvDirPath = (IJ.isWindows()) ? System.getProperty("user.home")+"\\miniconda3\\envs\\CellPose" : "/opt/miniconda3/envs/cellpose";
     public String cellposeCFosModel = "cyto";
+    private double resizeFactor = 0.5;
     public int cellposeCFosDiameter = 25;
-    private double cfosIntensityThresh = 200;
+    private double minCFosArea = 20;
+    private double maxCFosArea = 80;
+    private double cfosIntensityThresh = 250;
     private boolean useGpu = true;
 
     
@@ -94,7 +90,16 @@ public class Tools {
     
     
     /**
-     * Find image type
+     * Flush and close an image
+     */
+    public void flush_close(ImagePlus img) {
+        img.flush();
+        img.close();
+    }
+    
+    
+    /**
+     * Find images extension
      */
     public String findImageType(File imagesFolder) {
         String ext = "";
@@ -111,12 +116,21 @@ public class Tools {
                 case "lif"  :
                     ext = fileExt;
                     break;
-                case "isc2" :
+                case "ics" :
+                    ext = fileExt;
+                    break;
+                case "ics2" :
+                    ext = fileExt;
+                    break;
+                case "lsm" :
                     ext = fileExt;
                     break;
                 case "tif" :
                     ext = fileExt;
-                    break;    
+                    break;
+                case "tiff" :
+                    ext = fileExt;
+                    break;
             }
         }
         return(ext);
@@ -130,14 +144,14 @@ public class Tools {
         File inDir = new File(imagesFolder);
         String[] files = inDir.list();
         if (files == null) {
-            System.out.println("No image found in "+imagesFolder);
+            System.out.println("No image found in " + imagesFolder);
             return null;
         }
         ArrayList<String> images = new ArrayList();
         for (String f : files) {
             // Find images with extension
             String fileExt = FilenameUtils.getExtension(f);
-            if (fileExt.equals(imageExt))
+            if (fileExt.equals(imageExt) && !f.startsWith("."))
                 images.add(imagesFolder + File.separator + f);
         }
         Collections.sort(images);
@@ -148,7 +162,7 @@ public class Tools {
     /**
      * Find image calibration
      */
-    public Calibration findImageCalib(IMetadata meta) {
+    public void findImageCalib(IMetadata meta) {
         cal.pixelWidth = meta.getPixelsPhysicalSizeX(0).value().doubleValue();
         cal.pixelHeight = cal.pixelWidth;
         if (meta.getPixelsPhysicalSizeZ(0) != null)
@@ -157,18 +171,17 @@ public class Tools {
             cal.pixelDepth = 1;
         cal.setUnit("microns");
         System.out.println("XY calibration = " + cal.pixelWidth + ", Z calibration = " + cal.pixelDepth);
-        return(cal);
     }
     
     
-     /**
+    /**
      * Find channels name
      * @throws loci.common.services.DependencyException
      * @throws loci.common.services.ServiceException
      * @throws loci.formats.FormatException
      * @throws java.io.IOException
      */
-    public String[] findChannels (String imageName, IMetadata meta, ImageProcessorReader reader) throws DependencyException, ServiceException, FormatException, IOException {
+    public String[] findChannels (String imageName, IMetadata meta, ImageProcessorReader reader) throws loci.common.services.DependencyException, ServiceException, FormatException, IOException {
         int chs = reader.getSizeC();
         String[] channels = new String[chs];
         String imageExt =  FilenameUtils.getExtension(imageName);
@@ -179,7 +192,16 @@ public class Tools {
                     if (meta.getChannelID(0, n) == null)
                         channels[n] = Integer.toString(n);
                     else 
-                        channels[n] = meta.getChannelName(0, n).toString();
+                        channels[n] = meta.getChannelName(0, n);
+                }
+                break;
+            case "nd2" :
+                for (int n = 0; n < chs; n++) 
+                {
+                    if (meta.getChannelID(0, n) == null)
+                        channels[n] = Integer.toString(n);
+                    else 
+                        channels[n] = meta.getChannelName(0, n);
                 }
                 break;
             case "lif" :
@@ -187,14 +209,14 @@ public class Tools {
                     if (meta.getChannelID(0, n) == null || meta.getChannelName(0, n) == null)
                         channels[n] = Integer.toString(n);
                     else 
-                        channels[n] = meta.getChannelName(0, n).toString();
+                        channels[n] = meta.getChannelName(0, n);
                 break;
             case "czi" :
                 for (int n = 0; n < chs; n++) 
                     if (meta.getChannelID(0, n) == null)
                         channels[n] = Integer.toString(n);
                     else 
-                        channels[n] = meta.getChannelFluor(0, n).toString();
+                        channels[n] = meta.getChannelFluor(0, n);
                 break;
             case "ics" :
                 for (int n = 0; n < chs; n++) 
@@ -202,7 +224,14 @@ public class Tools {
                         channels[n] = Integer.toString(n);
                     else 
                         channels[n] = meta.getChannelExcitationWavelength(0, n).value().toString();
-                break;    
+                break;
+            case "ics2" :
+                for (int n = 0; n < chs; n++) 
+                    if (meta.getChannelID(0, n) == null)
+                        channels[n] = Integer.toString(n);
+                    else 
+                        channels[n] = meta.getChannelExcitationWavelength(0, n).value().toString();
+                break;   
             default :
                 for (int n = 0; n < chs; n++)
                     channels[n] = Integer.toString(n);
@@ -214,14 +243,15 @@ public class Tools {
     /**
      * Generate dialog box
      */
-    public String[] dialog(String[] chs) {      
+    public String[] dialog(String[] channels) {      
         GenericDialogPlus gd = new GenericDialogPlus("Parameters");
-        gd.setInsets​(0, 100, 0);
+        gd.setInsets​(0, 160, 0);
         gd.addImage(icon);
+        
         gd.addMessage("Channels", Font.getFont("Monospace"), Color.blue);
         int index = 0;
-        for (String chNames : channelNames) {
-            gd.addChoice(chNames+" : ", chs, chs[index]);
+        for (String ch : channelsName) {
+            gd.addChoice(ch, channels, channels[index]);
             index++;
         }
 
@@ -229,80 +259,59 @@ public class Tools {
         gd.addNumericField("Mean nucleus area (µm2): ", meanNucArea);
         
         gd.addMessage("c-Fos cells detection", Font.getFont("Monospace"), Color.blue);
-        gd.addNumericField("Min CFos area (µm2): ", minCFosArea);
-        gd.addNumericField("Max CFos area (µm2): ", maxCFosArea);
-        gd.addNumericField("Intensity threshold : ", cfosIntensityThresh);
         gd.addDirectoryField("Cellpose environment path: ", cellposeEnvDirPath);
+        
+        gd.addNumericField("Min c-Fos area (µm2): ", minCFosArea);
+        gd.addNumericField("Max c-Fos area (µm2): ", maxCFosArea);
+        gd.addNumericField("Mean intensity threshold : ", cfosIntensityThresh);
+        
         gd.addMessage("Image calibration", Font.getFont("Monospace"), Color.blue);
         gd.addNumericField("XY pixel size (µm): ", cal.pixelWidth);
         gd.showDialog();
         
-        String[] chChoices = new String[channelNames.length];
+        String[] chChoices = new String[channelsName.length];
         for (int n = 0; n < chChoices.length; n++) 
             chChoices[n] = gd.getNextChoice();
         if (gd.wasCanceled())
             chChoices = null;        
         
         meanNucArea = gd.getNextNumber();
+        
         minCFosArea = gd.getNextNumber();
         maxCFosArea = gd.getNextNumber();
         cfosIntensityThresh = gd.getNextNumber();
+        
         cal.pixelWidth = cal.pixelHeight = gd.getNextNumber();
         cal.pixelDepth = 1;
         pixArea = cal.pixelWidth*cal.pixelHeight;  
         
         return(chChoices);
     }
-     
+    
     
     /**
-     * Flush and close an image
+     * Get the number of nuclei in the image:
+     * Compute nuclei total area and divide it by meanNucArea
      */
-    public void flush_close(ImagePlus img) {
-        img.flush();
-        img.close();
-    }
-    
-    /**
-     * Clear out side roi
-     * @param img
-     * @param roi
-     */
-    public void clearOutSide(ImagePlus img, Roi roi) {
-        PolygonRoi poly = new PolygonRoi(roi.getFloatPolygon(), Roi.FREEROI);
-        poly.setLocation(0, 0);
-        for (int n = 1; n <= img.getNSlices(); n++) {
-            ImageProcessor ip = img.getImageStack().getProcessor(n);
-            ip.setRoi(poly);
-            ip.setBackgroundValue(0);
-            ip.setColor(0);
-            ip.fillOutside(poly);
-        }
-        img.updateAndDraw();
-    } 
-    
-    /**
-     * Get the number of nuclei in the image
-     * compute nuclei area
-     * divide area by meanNucleusArea
-     */ 
-    public double getNbNuclei(ImagePlus img, Roi roi) {
+    public int getNbNuclei(ImagePlus img, Roi roi) {
         ImagePlus imgG = gaussian_filter(img, 4);
         imgG = threshold(imgG, "Otsu");
         imgG = median_filter(imgG, 4, 4);
-        clearOutSide(img, roi);
-        IJ.setAutoThreshold(imgG, "Default dark");
+        clearOutside(imgG, roi);
+        imgG.setCalibration(cal);
+
         ResultsTable rt = new ResultsTable();
-        Analyzer ana = new Analyzer(imgG, Analyzer.AREA+Analyzer.LIMIT, rt);
-        ana.measure();
+        Analyzer analyzer = new Analyzer(imgG, Analyzer.AREA+Analyzer.LIMIT, rt);
+        IJ.setAutoThreshold(imgG, "Default dark");
+        analyzer.measure();
         double area = rt.getValue("Area", 0);
-        rt.reset();
-        img = imgG.duplicate();
+
         flush_close(imgG);
-        return (round(area/meanNucArea));
+        return ((int) round(area/meanNucArea));
     }
+     
     
-     /**
+    /**
      * 2D Gaussian filter using CLIJ2
      */ 
     public ImagePlus gaussian_filter(ImagePlus img, double sizeXY) {
@@ -317,23 +326,7 @@ public class Tools {
     
     
     /**
-     * Median filter using CLIJ2
-     */ 
-    public ImagePlus median_filter(ImagePlus img, double sizeXY, double sizeZ) {
-       ClearCLBuffer imgCL = clij2.push(img);
-       ClearCLBuffer imgCLMed = clij2.create(imgCL);
-       clij2.median2DBox(imgCL, imgCLMed, sizeXY, sizeXY);
-       clij2.release(imgCL);
-       ImagePlus imgMed = clij2.pull(imgCLMed);
-       clij2.release(imgCLMed);
-       return(imgMed);
-    }
-   
-    /**
-     * Threshold 
-     * USING CLIJ2
-     * @param img
-     * @param thMed
+     * Threshold using CLIJ2
      */
     public ImagePlus threshold(ImagePlus img, String thMed) {
         ClearCLBuffer imgCL = clij2.push(img);
@@ -345,111 +338,113 @@ public class Tools {
     }
     
     
+    /**
+     * 2D median filter using CLIJ2
+     */ 
+    public ImagePlus median_filter(ImagePlus img, double sizeXY, double sizeZ) {
+       ClearCLBuffer imgCL = clij2.push(img);
+       ClearCLBuffer imgCLMed = clij2.create(imgCL);
+       clij2.median2DBox(imgCL, imgCLMed, sizeXY, sizeXY);
+       clij2.release(imgCL);
+       ImagePlus imgMed = clij2.pull(imgCLMed);
+       clij2.release(imgCLMed);
+       return(imgMed);
+    }
     
+    
+    /**
+     * Clear outside ROI
+     */
+    public void clearOutside(ImagePlus img, Roi roi) {
+        PolygonRoi poly = new PolygonRoi(roi.getFloatPolygon(), Roi.FREEROI);
+        poly.setLocation(0, 0);
+        for (int n = 1; n <= img.getNSlices(); n++) {
+            ImageProcessor ip = img.getImageStack().getProcessor(n);
+            ip.setRoi(poly);
+            ip.setBackgroundValue(0);
+            ip.setColor(0);
+            ip.fillOutside(poly);
+        }
+        img.updateAndDraw();
+    } 
+    
+    
+    /*
+     * Look for all cells in a 2D image with CellPose
+     */
+   public Objects3DIntPopulation cellposeDetection(ImagePlus img, Roi roi){
+        // Resize image to speed up Cellpose computation
+        ImagePlus imgResized = img.resize((int)(img.getWidth()*resizeFactor), (int)(img.getHeight()*resizeFactor), "none");
+
+        // Define CellPose settings
+        CellposeTaskSettings settings = new CellposeTaskSettings(cellposeCFosModel, 1, cellposeCFosDiameter, cellposeEnvDirPath);
+        settings.useGpu(useGpu);
+        
+        // Run CellPose
+        CellposeSegmentImgPlusAdvanced cellpose = new CellposeSegmentImgPlusAdvanced(settings, imgResized);
+        ImagePlus imgOut = cellpose.run(); 
+        imgOut = imgOut.resize(img.getWidth(), img.getHeight(), "none");
+        clearOutside(imgOut, roi);
+        imgOut.setCalibration(cal);
+        
+        Objects3DIntPopulation pop = new Objects3DIntPopulation(ImageHandler.wrap(imgOut));
+        int nbCellsBeforeFiltering = pop.getNbObjects();
+        System.out.println(nbCellsBeforeFiltering + " CellPose detections");
+       
+        
+        
+        Objects3DIntPopulationComputation popComputation = new Objects3DIntPopulationComputation​(pop);
+        Objects3DIntPopulation popFilter = popComputation.getFilterSize(minCFosArea/pixArea, maxCFosArea/pixArea);
+        filterDetectionsByIntensity(popFilter, img);
+        popFilter.resetLabels();
+        System.out.println(popFilter.getNbObjects() + " detections remaining after size and intensity filtering (" + (pop.getNbObjects()-popFilter.getNbObjects()) + " filtered out)");
+
+        flush_close(imgResized);
+        flush_close(imgOut);
+        return(popFilter);
+    }
+   
+   
+    /**
+     * Filter cells by intensity
+     */
     public Objects3DIntPopulation filterDetectionsByIntensity(Objects3DIntPopulation cellPop, ImagePlus img) {
         cellPop.getObjects3DInt().removeIf(p -> 
                 (new MeasureIntensity(p, ImageHandler.wrap(img)).getValueMeasurement(MeasureIntensity.INTENSITY_AVG) < cfosIntensityThresh));
-        cellPop.resetLabels();
         return(cellPop);
     }
     
+    
+    /**
+     * Compute ROI area
+     */
     public double roiArea(Roi roi, ImagePlus img) {
         PolygonRoi poly = new PolygonRoi(roi.getFloatPolygon(), Roi.FREEROI);
         poly.setLocation(0, 0);
         img.setRoi(poly);
+        img.setCalibration(cal);
+        
         ResultsTable rt = new ResultsTable();
-        Analyzer ana = new Analyzer(img, Analyzer.AREA, rt);
-        ana.measure();
-        double area = rt.getValue("Area", 0);
-        return(area);
+        Analyzer analyzer = new Analyzer(img, Analyzer.AREA, rt);
+        analyzer.measure();
+        return(rt.getValue("Area", 0));
     }   
     
     
-    /**
-    * Find cells with cellpose
-    * return cell cytoplasm
-     * @param imgCell
-     * @param roi
-    * @return 
-    */
-    public Objects3DIntPopulation cellPoseCellsPop(ImagePlus imgCell, Roi roi){
-        ImagePlus imgIn = null;
-        clearOutSide(imgCell, roi);
-        // resize to be in a friendly scale
-        int width = imgCell.getWidth();
-        int height = imgCell.getHeight();
-        float factor = 0.5f;
-        boolean resized = false;
-        if (imgCell.getWidth() > 1024) {
-            imgIn = imgCell.resize((int)(width*factor), (int)(height*factor), 1, "none");
-            resized = true;
-        }
-        else
-            imgIn = new Duplicator().run(imgCell);
-        imgIn.setCalibration(cal);
-        CellposeTaskSettings settings = new CellposeTaskSettings(cellposeCFosModel, 1, cellposeCFosDiameter, cellposeEnvDirPath);
-        settings.useGpu(true);
-        CellposeSegmentImgPlusAdvanced cellpose = new CellposeSegmentImgPlusAdvanced(settings, imgIn);
-        ImagePlus cellpose_img = cellpose.run(); 
-        flush_close(imgIn);
-        ImagePlus cells_img = (resized) ? cellpose_img.resize(width, height, 1, "none") : cellpose_img;
-        flush_close(cellpose_img);
-        cells_img.setCalibration(cal);
-        Objects3DIntPopulation pop = new Objects3DIntPopulation(ImageHandler.wrap(cells_img));
-        System.out.println(pop.getNbObjects());
-        Objects3DIntPopulation cellFilterPop = new Objects3DIntPopulationComputation(pop).getFilterSize(minCFosArea/pixArea, maxCFosArea/pixArea);
-        cellFilterPop.resetLabels();
-        flush_close(cells_img);
-        return(cellFilterPop);
-    }
-
-   
-    
-    /**
-     * Label object
-     * @param popObj
-     * @param img 
-     * @param fontSize 
+    /*
+     * Save population of cells in image
      */
-    public void labelObject(Object3DInt obj, ImagePlus img, int fontSize) {
-        if (IJ.isMacOSX())
-            fontSize *= 3;
+    public void drawResults(Objects3DIntPopulation pop, ImagePlus img, String imageName, String outDir) {
+        ImageHandler imgObj = ImageHandler.wrap(img).createSameDimensions();
+        if (pop.getNbObjects() > 0)
+            pop.drawInImage(imgObj);
         
-        BoundingBox bb = obj.getBoundingBox();
-        int z = bb.zmin + 1;
-        int x = bb.xmin;
-        int y = bb.ymin;
-        img.setSlice(z);
-        ImageProcessor ip = img.getProcessor();
-        ip.setFont(new Font("SansSerif", Font.PLAIN, fontSize));
-        ip.setColor(255);
-        ip.drawString(Integer.toString((int)obj.getLabel()), x, y);
-        img.updateAndDraw();
-    }
-        
-     
-     /**
-     * Save foci Population in image
-     * @param imgNuc nucleus blue channel
-     * @param cFosPop CFos cells in green channel
-     * @param imgCFos 
-     * @param imageName 
-     * @param outDir 
-     */
-    public void saveImgObjects(Objects3DIntPopulation cFosPop, ImagePlus imgNuc, ImagePlus imgCFos, String imageName, String outDir) {
-
-        // Draw CFos cells in green
-        ImageHandler imgObj = ImageHandler.wrap(imgCFos).createSameDimensions();
-        if (cFosPop.getNbObjects() > 0)
-            for (Object3DInt obj: cFosPop.getObjects3DInt())
-                obj.drawObject(imgObj, obj.getLabel());
-        
-        // Save image
-        ImagePlus[] imgColors = {null, imgObj.getImagePlus(), imgNuc};
+        ImagePlus[] imgColors = {null, imgObj.getImagePlus(), null, img};
         ImagePlus imgObjects = new RGBStackMerge().mergeHyperstacks(imgColors, false);
         imgObjects.setCalibration(cal);
         FileSaver ImgObjectsFile = new FileSaver(imgObjects);
         ImgObjectsFile.saveAsTiff(outDir + imageName + ".tif"); 
         imgObj.closeImagePlus();
     }
+    
 }

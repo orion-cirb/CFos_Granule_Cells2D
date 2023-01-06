@@ -2,7 +2,7 @@
 
 **Developed for:** Beetsi
 
-**Team:** Sélimi
+**Team:** Selimi
 
 **Date:** December 2022
 
@@ -13,14 +13,14 @@
 2D images taken with a x40 objective
 
 2 channels:
-  1. *CSU_405*: DAPI nuclei
+  1. *CSU_405*: Hoechst nuclei
   2. *CSU_642*: c-Fos cells 
 
 With each image should be provided a .roi or .zip file containing one or multiple ROI(s).
 
 ### Plugin description
 
-* Count nuclei based on the total volume of packed nuclei divided by as nucleus volume estimation of 250 microns^3
+* Count nuclei based on the total volume of packed nuclei divided by a nucleus volume estimation of 250 microns^3
 * Count c-Fos cells with Cellpose
 
 ### Dependencies

@@ -4,7 +4,7 @@
 
 **Team:** Selimi
 
-**Date:** December 2022
+**Date:** January 2023
 
 **Software:** Fiji
 
@@ -20,7 +20,7 @@ With each image should be provided a .roi or .zip file containing one or multipl
 
 ### Plugin description
 
-* Count nuclei based on the total volume of packed nuclei divided by a nucleus volume estimation of 250 microns^3
+* Count nuclei based on the total area of packed nuclei divided by a nucleus area estimation
 * Count c-Fos cells with Cellpose
 
 ### Dependencies
@@ -31,4 +31,4 @@ With each image should be provided a .roi or .zip file containing one or multipl
 
 ### Version history
 
-Version 1 released on December 14, 2022.
+Version 1 released on January 6, 2022.

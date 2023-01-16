@@ -49,7 +49,8 @@ public class CFos_Granule_Cells_2D implements PlugIn {
             
             // Find images with file_ext extension
             String file_ext = "nd"; //tools.findImageType(new File(imageDir));
-            ArrayList<String> imageFiles = tools.findImages(imageDir, file_ext);
+            ArrayList<String> imageFiles = new ArrayList();
+            tools.findImages(imageDir, file_ext, imageFiles);
             if (imageFiles == null) {
                 IJ.showMessage("Error", "No images found with " + file_ext + " extension");
                 return;
@@ -63,7 +64,7 @@ public class CFos_Granule_Cells_2D implements PlugIn {
             }
             
             // Write header in results file
-            String header = "Image name\tROI name\tROI area (µm2)\tNb nuclei\tNb c-Fos cells\n";
+            String header = "Parent folder\tImage name\tROI name\tROI area (µm2)\tNb nuclei\tNb c-Fos cells\n";
             FileWriter  fwResults = new FileWriter(outDirResults + "results.xls", false);
             outPutResults = new BufferedWriter(fwResults);
             outPutResults.write(header);
@@ -86,7 +87,7 @@ public class CFos_Granule_Cells_2D implements PlugIn {
             
             // Find channels name
             //String[] channels = tools.findChannels(imageFiles.get(0), meta, reader);
-            String[] channels = {"405" , "642"};
+            String[] channels = {"w1CSU_405_t1" , "w4CSU_642_t1"};
             
             // Dialog box
             String[] chs = tools.dialog(channels);
@@ -97,7 +98,8 @@ public class CFos_Granule_Cells_2D implements PlugIn {
             
             for (String f : imageFiles) {
                 String rootName = FilenameUtils.getBaseName(f);
-                tools.print("--- ANALYZING IMAGE " + rootName + " ------");
+                String parentFolder = f.replace(imageDir, "").replace(FilenameUtils.getName(f), "");
+                tools.print("--- ANALYZING IMAGE " + parentFolder + rootName + " ------");
                 
                 /*ImporterOptions options = new ImporterOptions();
                 options.setId(f);
@@ -106,12 +108,12 @@ public class CFos_Granule_Cells_2D implements PlugIn {
                 options.setColorMode(ImporterOptions.COLOR_MODE_GRAYSCALE);*/
                 
                 // Find ROI(s)
-                String roiFile = imageDir+rootName+".roi";
+                String roiFile = imageDir+parentFolder+rootName+".roi";
                 if (!new File(roiFile).exists())
-                    roiFile = imageDir+rootName+".zip";
+                    roiFile = imageDir+parentFolder+rootName+".zip";
                 if (!new File(roiFile).exists()) {
-                    tools.print("ERROR: No ROI file found for image " + rootName);
-                    IJ.showMessage("Error", "No ROI file found for image " + rootName);
+                    tools.print("ERROR: No ROI file found for image " + parentFolder + rootName);
+                    IJ.showMessage("Error", "No ROI file found for image " + parentFolder + rootName);
                     continue;
                 }
                 
@@ -131,7 +133,7 @@ public class CFos_Granule_Cells_2D implements PlugIn {
                     tools.print("Opening nuclei channel...");
                     //int indexCh = ArrayUtils.indexOf(channels, chs[0]);
                     //ImagePlus imgNuc = BF.openImagePlus(options)[indexCh];
-                    ImagePlus imgNuc = IJ.openImage(imageDir+rootName+"_w1CSU_405_t1.tif");
+                    ImagePlus imgNuc = IJ.openImage(imageDir+parentFolder+rootName+"_"+chs[0]+".tif");
                     imgNuc.setRoi(roi);
                     ImagePlus imgNucCrop = imgNuc.crop();
                     tools.flush_close(imgNuc);
@@ -145,7 +147,7 @@ public class CFos_Granule_Cells_2D implements PlugIn {
                     tools.print("Opening c-Fos cells channel...");
                     //int indexCh = ArrayUtils.indexOf(channels, chs[1]);
                     //ImagePlus imgNuc = BF.openImagePlus(options)[indexCh];
-                    ImagePlus imgCFos = IJ.openImage(imageDir+rootName+"_w4CSU_642_t1.tif");
+                    ImagePlus imgCFos = IJ.openImage(imageDir+parentFolder+rootName+"_"+chs[1]+".tif");
                     imgCFos.setRoi(roi);
                     ImagePlus imgCFosCrop = imgCFos.crop();
                     tools.flush_close(imgCFos);
@@ -159,11 +161,11 @@ public class CFos_Granule_Cells_2D implements PlugIn {
                     double roiArea = tools.roiArea(roi, imgCFosCrop);
                     
                     // Write results
-                    outPutResults.write(rootName+"\t"+roiName+"\t"+roiArea+"\t"+nbNuclei+"\t"+nbCFos+"\n");
+                    outPutResults.write(parentFolder.replace("/", "")+"\t"+rootName+"\t"+roiName+"\t"+roiArea+"\t"+nbNuclei+"\t"+nbCFos+"\n");
                     outPutResults.flush();
                     
                     // Save images
-                    tools.drawResults(cfosPop, imgCFosCrop, rootName+"_"+roiName, outDirResults);
+                    tools.drawResults(cfosPop, imgCFosCrop, parentFolder.replace("/", "_")+rootName+"_"+roiName, outDirResults);
                     
                     tools.flush_close(imgNucCrop);
                     tools.flush_close(imgCFosCrop);

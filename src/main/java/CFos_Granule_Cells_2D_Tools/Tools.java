@@ -140,22 +140,20 @@ public class Tools {
     /**
      * Find images in folder
      */
-    public ArrayList<String> findImages(String imagesFolder, String imageExt) {
+    public void findImages(String imagesFolder, String imageExt, ArrayList<String> imageFiles) {
         File inDir = new File(imagesFolder);
-        String[] files = inDir.list();
-        if (files == null) {
-            System.out.println("No image found in " + imagesFolder);
-            return null;
+        File[] files = inDir.listFiles();
+        
+        for (File file: files) {
+            if(file.isFile()) {
+                String fileExt = FilenameUtils.getExtension(file.getName());
+                if (fileExt.equals(imageExt) && !file.getName().startsWith("."))
+                    imageFiles.add(file.getAbsolutePath());
+            } else if (file.isDirectory() && !file.getName().equals("Results")) {
+                findImages(file.getAbsolutePath(), imageExt, imageFiles);
+            }
         }
-        ArrayList<String> images = new ArrayList();
-        for (String f : files) {
-            // Find images with extension
-            String fileExt = FilenameUtils.getExtension(f);
-            if (fileExt.equals(imageExt) && !f.startsWith("."))
-                images.add(imagesFolder + File.separator + f);
-        }
-        Collections.sort(images);
-        return(images);
+        Collections.sort(imageFiles);
     }
     
     
@@ -266,7 +264,7 @@ public class Tools {
         gd.addNumericField("Mean intensity threshold : ", cfosIntensityThresh);
         
         gd.addMessage("Image calibration", Font.getFont("Monospace"), Color.blue);
-        gd.addNumericField("XY pixel size (µm): ", cal.pixelWidth);
+        gd.addNumericField("XY pixel size (µm): ", cal.pixelWidth, 4);
         gd.showDialog();
         
         String[] chChoices = new String[channelsName.length];

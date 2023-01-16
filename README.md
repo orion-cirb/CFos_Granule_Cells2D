@@ -31,4 +31,4 @@ With each image should be provided a .roi or .zip file containing one or multipl
 
 ### Version history
 
-Version 1 released on January 6, 2022.
+Version 1 released on January 16, 2022.

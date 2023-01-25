@@ -102,38 +102,24 @@ public class Tools {
      * Find images extension
      */
     public String findImageType(File imagesFolder) {
-        String ext = "";
-        String[] files = imagesFolder.list();
-        for (String name : files) {
-            String fileExt = FilenameUtils.getExtension(name);
-            switch (fileExt) {
-               case "nd" :
-                   ext = fileExt;
-                   break;
-                case "czi" :
-                   ext = fileExt;
-                   break;
-                case "lif"  :
-                    ext = fileExt;
-                    break;
-                case "ics" :
-                    ext = fileExt;
-                    break;
-                case "ics2" :
-                    ext = fileExt;
-                    break;
-                case "lsm" :
-                    ext = fileExt;
-                    break;
-                case "tif" :
-                    ext = fileExt;
-                    break;
-                case "tiff" :
-                    ext = fileExt;
-                    break;
+        File[] files = imagesFolder.listFiles();
+        for (File file: files) {
+            if(file.isFile()) {
+                String fileExt = FilenameUtils.getExtension(file.getName());
+                switch (fileExt) {
+                    case "tif" :
+                        return(fileExt);
+                    case "TIF" :
+                        return(fileExt);
+                }
+            } else if (file.isDirectory() && !file.getName().equals("Results") && !file.getName().equals("Acquisition")) {
+                String fileExt = findImageType(file);
+                if(fileExt != null) {
+                    return(fileExt);
+                }
             }
         }
-        return(ext);
+        return(null);
     }
     
     
@@ -157,22 +143,8 @@ public class Tools {
     }
     
     
-    /**
-     * Find image calibration
-     */
-    public void findImageCalib(IMetadata meta) {
-        cal.pixelWidth = meta.getPixelsPhysicalSizeX(0).value().doubleValue();
-        cal.pixelHeight = cal.pixelWidth;
-        if (meta.getPixelsPhysicalSizeZ(0) != null)
-            cal.pixelDepth = meta.getPixelsPhysicalSizeZ(0).value().doubleValue();
-        else
-            cal.pixelDepth = 1;
-        cal.setUnit("microns");
-        System.out.println("XY calibration = " + cal.pixelWidth + ", Z calibration = " + cal.pixelDepth);
-    }
-    
-    
-    /**
+
+            /**
      * Find channels name
      * @throws loci.common.services.DependencyException
      * @throws loci.common.services.ServiceException
@@ -237,7 +209,7 @@ public class Tools {
         return(channels);         
     }
     
-        
+    
     /**
      * Generate dialog box
      */

@@ -17,14 +17,6 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import loci.common.services.DependencyException;
-import loci.common.services.ServiceException;
-import loci.common.services.ServiceFactory;
-import loci.formats.FormatException;
-import loci.formats.meta.IMetadata;
-import loci.formats.services.OMEXMLService;
-import loci.plugins.in.ImporterOptions;
-import loci.plugins.util.ImageProcessorReader;
 import mcib3d.geom2.Objects3DIntPopulation;
 import org.apache.commons.io.FilenameUtils;
 
@@ -47,12 +39,19 @@ public class CFos_Granule_Cells_2D implements PlugIn {
                 return;
             }
             
-            // Find images with file_ext extension
-            String file_ext = "nd"; //tools.findImageType(new File(imageDir));
+            // Find images with nd extension
+            
             ArrayList<String> imageFiles = new ArrayList();
-            tools.findImages(imageDir, file_ext, imageFiles);
+            tools.findImages(imageDir, "nd", imageFiles);
             if (imageFiles == null) {
-                IJ.showMessage("Error", "No images found with " + file_ext + " extension");
+                IJ.showMessage("Error", "No images found with nd extension");
+                return;
+            }
+            
+            // Determine if channels have tif or TIF extension
+            String fileExt = tools.findImageType(new File(imageDir));
+            if (imageFiles == null) {
+                IJ.showMessage("Error", "No channels found with tif or TIF extension");
                 return;
             }
             
@@ -70,23 +69,12 @@ public class CFos_Granule_Cells_2D implements PlugIn {
             outPutResults.write(header);
             outPutResults.flush();
             
-            // Create OME-XML metadata store of the latest schema version
-            /*ServiceFactory factory;
-            factory = new ServiceFactory();
-            OMEXMLService service = factory.getInstance(OMEXMLService.class);
-            IMetadata meta = service.createOMEXMLMetadata();
-            ImageProcessorReader reader = new ImageProcessorReader();
-            reader.setMetadataStore(meta);
-            reader.setId(imageFiles.get(0));*/
-            
             // Find image calibration
-            //tools.findImageCalib(meta);
             tools.cal.pixelWidth = tools.cal.pixelHeight = 0.1625;
             tools.cal.pixelDepth = 1;
             tools.pixArea = tools.cal.pixelWidth * tools.cal.pixelHeight * tools.cal.pixelDepth;
             
             // Find channels name
-            //String[] channels = tools.findChannels(imageFiles.get(0), meta, reader);
             String[] channels = {"w1CSU_405_t1" , "w4CSU_642_t1"};
             
             // Dialog box
@@ -100,12 +88,6 @@ public class CFos_Granule_Cells_2D implements PlugIn {
                 String rootName = FilenameUtils.getBaseName(f);
                 String parentFolder = f.replace(imageDir, "").replace(FilenameUtils.getName(f), "");
                 tools.print("--- ANALYZING IMAGE " + parentFolder + rootName + " ------");
-                
-                /*ImporterOptions options = new ImporterOptions();
-                options.setId(f);
-                options.setSplitChannels(true);
-                options.setQuiet(true);
-                options.setColorMode(ImporterOptions.COLOR_MODE_GRAYSCALE);*/
                 
                 // Find ROI(s)
                 String roiFile = imageDir+parentFolder+rootName+".roi";
@@ -124,16 +106,9 @@ public class CFos_Granule_Cells_2D implements PlugIn {
                     String roiName = roi.getName();
                     tools.print("- Analyzing ROI " + roiName + " -");
                     
-                    /*Region reg = new Region(roi.getBounds().x, roi.getBounds().y, roi.getBounds().width, roi.getBounds().height);
-                    options.setCrop(true);
-                    options.setCropRegion(0, reg);
-                    options.doCrop();*/
-                    
                     // Open Hoechst channel
                     tools.print("Opening nuclei channel...");
-                    //int indexCh = ArrayUtils.indexOf(channels, chs[0]);
-                    //ImagePlus imgNuc = BF.openImagePlus(options)[indexCh];
-                    ImagePlus imgNuc = IJ.openImage(imageDir+parentFolder+rootName+"_"+chs[0]+".tif");
+                    ImagePlus imgNuc = IJ.openImage(imageDir+parentFolder+rootName+"_"+chs[0]+"."+fileExt);
                     imgNuc.setRoi(roi);
                     ImagePlus imgNucCrop = imgNuc.crop();
                     tools.flush_close(imgNuc);
@@ -145,9 +120,7 @@ public class CFos_Granule_Cells_2D implements PlugIn {
                     
                     // Open CFos channel
                     tools.print("Opening c-Fos cells channel...");
-                    //int indexCh = ArrayUtils.indexOf(channels, chs[1]);
-                    //ImagePlus imgNuc = BF.openImagePlus(options)[indexCh];
-                    ImagePlus imgCFos = IJ.openImage(imageDir+parentFolder+rootName+"_"+chs[1]+".tif");
+                    ImagePlus imgCFos = IJ.openImage(imageDir+parentFolder+rootName+"_"+chs[1]+"."+fileExt);
                     imgCFos.setRoi(roi);
                     ImagePlus imgCFosCrop = imgCFos.crop();
                     tools.flush_close(imgCFos);
@@ -173,7 +146,7 @@ public class CFos_Granule_Cells_2D implements PlugIn {
             }
             outPutResults.close();
             tools.print("--- All done! ---");
-        } catch (IOException ex) { // | DependencyException | ServiceException | FormatException ex) {
+        } catch (IOException ex) {
             Logger.getLogger(CFos_Granule_Cells_2D.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
